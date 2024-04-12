@@ -3,9 +3,12 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
+require('dotenv').config();
 
 const app = express();
-const port = 80;
+const port = process.env.PORT || 3000; // Use Heroku's port if it is set, else use 3000
+
+
 
 app.use(bodyParser.json());
 app.use(express.static('public'));
@@ -45,5 +48,5 @@ app.post('/api/transactions', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
+    console.log(`Server running on http://localhost:${port}`);
+  });
