@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Viewer</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+
+    
+<style>
+  .hidden { display: none; }
+  table, th, td { border: 1px solid black; border-collapse: collapse; }
+  th, td { padding: 8px; text-align: left; }
+</style>
+</head>
+<body>
+  <h1>Transaction Filter</h1>
+  <form id="filterForm">
+    <label for="symbol">Token Symbol (leave empty to search for all):</label>
+    <input type="text" id="symbol" name="symbol">
+    <label for="amountStart">Amount Starts With(leave empty to search for all):</label>
+    <input type="text" id="amountStart" name="amountStart">
+    <button type="submit">Search Transactions</button>
+    <button type="button" id="stopSearch" class="hidden">Stop Search</button>
+  </form>
+
+  <table id="transactionsTable" class="hidden">
+    <thead>
+      <tr>
+        <th><span id="date">Date</span><span id="amount">Amount</span><span id="global">Global TX Hash</span></th>
+      
+      </tr>
+    </thead>
+    <tbody id="transactions"></tbody>
+  </table>
+  <div id="pagination" class="hidden">
+    <button onclick="changePage(-1)">Previous</button>
+    <span id="pageIndicator">Page 1</span>
+    <button onclick="changePage(1)">Next</button>
+  </div>
+
+  <script>
+    const transactionsPerPage = 999;
+    let currentPage = 0;
+    let allTransactions = [];
+    let isSearching = false;
+
+    const stopButton = document.getElementById('stopSearch');
+    const searchButton = document.getElementById('filterForm').querySelector('button[type="submit"]');
+    const transactionsTable = document.getElementById('transactionsTable');
+    const paginationDiv = document.getElementById('pagination');
+    const pageIndicator = document.getElementById('pageIndicator');
+
+    function renderTransactions(page) {
+    const tbody = document.getElementById('transactions');
+    tbody.innerHTML = '';  // Clear previous entries
+    const start = page * transactionsPerPage;
+    const end = start + transactionsPerPage;
+    const pageTransactions = allTransactions.slice(start, end);
+
+    pageTransactions.forEach((tx, index) => {
+        // Create the main row
+        const row = tbody.insertRow();
+
+        // Date cell
+        const dateCell = row.insertCell(0);
+        dateCell.textContent = new Date(tx.timestamp).toLocaleString();
+
+        // Token Amount cell
+        const tokenAmountCell = row.insertCell(1);
+        tokenAmountCell.textContent = `${tx.tokenAmount} ${tx.symbol}`;
+
+        // Global Transaction Hash cell
+        const txHashCell = row.insertCell(2);
+        if (tx.globalTx && tx.globalTx.originTx && tx.globalTx.originTx.txHash) {
+            const txHashLink = document.createElement('a');
+            txHashLink.href = `https://wormholescan.io/#/tx/${tx.globalTx.originTx.txHash}`;
+            txHashLink.textContent = tx.globalTx.originTx.txHash;
+            txHashLink.target = "_blank";
+            txHashCell.appendChild(txHashLink);
+        } else {
+            txHashCell.textContent = 'N/A';
+        }
+
+        // view details btn
+        const detailButtonCell = row.insertCell(3);
+        const btn = document.createElement('button');
+        btn.textContent = 'View Details';
+        btn.onclick = () => toggleDetails(tx, row);
+        detailButtonCell.appendChild(btn);
+
+        // create row for displaying extra details
+        const detailRow = tbody.insertRow();
+        detailRow.hidden = true;
+        const detailCell = detailRow.insertCell(0);
+        detailCell.colSpan = 4; // Make the cell span all columns
+        detailCell.innerHTML = `<pre>${JSON.stringify(tx, null, 2)}</pre>`;
+    });
+
+    pageIndicator.textContent = `Page ${page + 1}`;
+}
+
+function toggleDetails(tx, row) {
+    const detailRow = row.nextElementSibling; // Access the hidden detail row
+    detailRow.hidden = !detailRow.hidden; // Toggle the visibility
+}
+
+//if needed but displays 999 per table
+    function changePage(direction) {
+        currentPage += direction;
+        renderTransactions(currentPage);
+        document.querySelector('button[onclick="changePage(-1)"]').disabled = currentPage === 0;
+        document.querySelector('button[onclick="changePage(1)"]').disabled = (currentPage + 1) * transactionsPerPage >= allTransactions.length;
+    }
+
+    document.getElementById('filterForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (isSearching) return; // Prevent new search if already searching
+
+        currentPage = 0; // Reset to first page for new search
+        allTransactions = [];
+        const symbol = document.getElementById('symbol').value;
+        const amountStart = document.getElementById('amountStart').value;
+
+        isSearching = true;
+        searchButton.disabled = true;
+        stopButton.classList.remove('hidden');
+        transactionsTable.classList.add('hidden');
+        paginationDiv.classList.add('hidden');
+        //post
+        fetch('/api/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol, exactTokenAmountStart: amountStart })
+        })
+        .then(response => response.json())
+        .then(transactions => {
+            allTransactions = transactions;
+            if (transactions.length > 0) {
+                transactionsTable.classList.remove('hidden');
+                paginationDiv.classList.remove('hidden');
+                renderTransactions(currentPage);
+            }
+            isSearching = false;
+            searchButton.disabled = false;
+            stopButton.classList.add('hidden');
+            changePage(0); // Ensure pagination buttons are correctly enabled/disabled
+        });
+    });
+
+    stopButton.addEventListener('click', function() {
+        isSearching = false;
+        searchButton.disabled = false;
+        stopButton.classList.add('hidden');
+    });
+</script>
+</body>
+</html>
